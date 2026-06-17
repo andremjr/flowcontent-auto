@@ -1,0 +1,38 @@
+{
+  "name": "flowcontent-auto",
+  "private": true,
+  "version": "0.1.2",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 1420",
+    "dev:desktop": "tauri dev",
+    "dev:monitor": "node --experimental-websocket tools/test-monitor.mjs",
+    "check": "tsc --noEmit",
+    "build": "tsc && vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "test": "node --test tests",
+    "test:srt": "py -3 -m unittest discover -s srt -p \"test_*.py\" -v",
+    "diagnostics:watch": "node tools/watch-diagnostics.mjs",
+    "test:monitor": "node --experimental-websocket tools/test-monitor.mjs",
+    "test:report": "node tools/test-report.mjs",
+    "trace:analyze": "node tools/analyze-flow-trace.mjs",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "release:manifest": "node tools/generate-updater-manifest.mjs"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/plugin-dialog": "^2.7.1",
+    "@tauri-apps/plugin-updater": "^2.10.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "FlowContent Auto Bridge",
+  "version": "1.0.0",
+  "description": "Ponte local autorizada entre o FlowContent Auto e a página do Google Flow.",
+  "icons": {
+    "32": "icons/icon-32.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "FlowContent Auto Bridge",
+    "default_icon": {
+      "32": "icons/icon-32.png"
+    }
+  },
+  "permissions": ["tabs", "storage", "cookies", "alarms", "debugger", "scripting"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "https://labs.google/fx/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*",
+    "ws://127.0.0.1/*",
+    "ws://localhost/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://labs.google/fx/*"],
+      "js": ["page_bridge.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://labs.google/fx/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

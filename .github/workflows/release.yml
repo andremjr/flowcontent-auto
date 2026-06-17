@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build desktop app
+        run: npm run tauri build
+
+      - name: Normalize updater asset name
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $bundleDir = "src-tauri/target/release/bundle/nsis"
+          $original = Join-Path $bundleDir "FlowContent Auto_${version}_x64-setup.exe"
+          $normalized = Join-Path $bundleDir "flowcontent_auto_${version}_x64_setup.exe"
+          Copy-Item $original $normalized -Force
+
+      - name: Sign normalized updater asset
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          .\node_modules\.bin\tauri.cmd signer sign `
+            -k "$env:TAURI_SIGNING_PRIVATE_KEY" `
+            -p "$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD" `
+            "src-tauri\target\release\bundle\nsis\flowcontent_auto_${version}_x64_setup.exe"
+
+      - name: Generate latest.json
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $env:UPDATE_BASE_URL = "https://github.com/andremjr/flowcontent-auto/releases/download/v$version"
+          $env:UPDATE_ASSET_NAME = "flowcontent_auto_${version}_x64_setup.exe"
+          npm run release:manifest
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            src-tauri/target/release/bundle/nsis/FlowContent Auto_*_x64-setup.exe
+            src-tauri/target/release/bundle/nsis/flowcontent_auto_*_x64_setup.exe
+            src-tauri/target/release/bundle/nsis/flowcontent_auto_*_x64_setup.exe.sig
+            src-tauri/target/release/bundle/nsis/latest.json
+            src-tauri/target/release/bundle/msi/FlowContent Auto_*_x64_en-US.msi

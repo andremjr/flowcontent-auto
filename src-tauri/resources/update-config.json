@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "endpoints": [
+    "https://github.com/andremjr/flowcontent-auto/releases/latest/download/latest.json"
+  ]
+}
