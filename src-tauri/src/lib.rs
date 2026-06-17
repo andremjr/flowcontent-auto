@@ -4191,26 +4191,59 @@ fn pick_workspace_root(app: &tauri::AppHandle, app_data_dir: &Path) -> PathBuf {
     selected
 }
 
-fn bundled_or_dev_path(app: &tauri::AppHandle, relative: &str) -> Result<PathBuf, String> {
+fn push_unique_path(paths: &mut Vec<PathBuf>, candidate: PathBuf) {
+    if !paths.iter().any(|existing| existing == &candidate) {
+        paths.push(candidate);
+    }
+}
+
+fn bundled_resource_roots(app: &tauri::AppHandle) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+
     if let Ok(resource_dir) = app.path().resource_dir() {
-        let bundled = resource_dir.join(relative);
-        if bundled.exists() {
-            return Ok(bundled);
-        }
-        if !cfg!(debug_assertions) {
-            return Err(format!(
-                "Recurso empacotado ausente: {} (base: {})",
-                relative,
-                resource_dir.display()
-            ));
+        push_unique_path(&mut roots, resource_dir.clone());
+        push_unique_path(&mut roots, resource_dir.join("_up_"));
+    }
+
+    if let Ok(executable_path) = env::current_exe() {
+        if let Some(executable_dir) = executable_path.parent() {
+            push_unique_path(&mut roots, executable_dir.to_path_buf());
+            push_unique_path(&mut roots, executable_dir.join("_up_"));
         }
     }
+
+    if let Ok(app_data_dir) = app.path().app_data_dir() {
+        push_unique_path(&mut roots, app_data_dir.clone());
+        push_unique_path(&mut roots, app_data_dir.join("_up_"));
+    }
+
+    roots
+}
+
+fn bundled_or_dev_path(app: &tauri::AppHandle, relative: &str) -> Result<PathBuf, String> {
+    let bundled_candidates = bundled_resource_roots(app)
+        .into_iter()
+        .map(|root| root.join(relative))
+        .collect::<Vec<_>>();
+
+    for candidate in &bundled_candidates {
+        if candidate.exists() {
+            return Ok(candidate.clone());
+        }
+    }
+
     if !cfg!(debug_assertions) {
+        let checked = bundled_candidates
+            .iter()
+            .map(|candidate| candidate.display().to_string())
+            .collect::<Vec<_>>()
+            .join(" | ");
         return Err(format!(
-            "Nao foi possivel localizar o diretorio de recursos para: {}",
-            relative
+            "Recurso empacotado ausente: {} (checado em: {})",
+            relative, checked
         ));
     }
+
     let repository_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .ok_or_else(|| format!("Nao foi possivel localizar o recurso local: {relative}"))?
@@ -4219,10 +4252,10 @@ fn bundled_or_dev_path(app: &tauri::AppHandle, relative: &str) -> Result<PathBuf
 }
 
 fn bundled_update_config_path(app: &tauri::AppHandle) -> Option<PathBuf> {
-    app.path()
-        .resource_dir()
-        .ok()
-        .map(|resource_dir| resource_dir.join("resources").join("update-config.json"))
+    bundled_resource_roots(app)
+        .into_iter()
+        .map(|root| root.join("resources").join("update-config.json"))
+        .find(|candidate| candidate.is_file())
 }
 
 fn dev_update_config_path() -> Option<PathBuf> {
