@@ -1,6 +1,6 @@
 [package]
 name = "flowcontent-auto"
-version = "0.1.7"
+version = "0.1.8"
 description = "FlowContent Auto desktop application"
 authors = ["FlowContent Auto"]
 edition = "2021"

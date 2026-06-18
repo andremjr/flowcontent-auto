@@ -431,7 +431,7 @@ export default function App() {
 
                         <div className="generation-settings">
                           <label className="gen-setting">
-                            <span>GeraÃ§Ãµes simultÃ¢neas</span>
+                            <span>Gerações simultâneas</span>
                             <input
                               type="number"
                               min={1}
@@ -833,7 +833,7 @@ export default function App() {
             </div>
             <label>Nome da produção<input autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ex.: Documentário Aurora" /></label>
             <p className="dialog-note">O projeto correspondente será criado no Flow e vinculado automaticamente quando a ponte estiver conectada.</p>
-            <div className="folder-preview"><span>PASTA FINAL DOS ASSETS</span><code>{assetOutputDir || "Usar downloads dentro da pasta local da produÃ§Ã£o"}</code></div>
+            <div className="folder-preview"><span>PASTA FINAL DOS ASSETS</span><code>{assetOutputDir || "Usar downloads dentro da pasta local da produção"}</code></div>
             <div className="dialog-actions">
               <button className="quiet-button" onClick={handleChooseAssetOutputDir}>Escolher pasta final</button>
             </div>
