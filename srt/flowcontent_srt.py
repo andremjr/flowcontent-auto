@@ -20,6 +20,8 @@ from segmenter import (
     render_asset_srt,
     render_srt,
     segment_assets,
+    segment_assets_by_duration,
+    segment_assets_by_word_count,
     segment_captions,
     write_manifest,
 )
@@ -33,8 +35,13 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate caption and asset SRT files from one audio.")
     parser.add_argument("--audio", required=True, help="Audio file to transcribe.")
     parser.add_argument("--project-root", required=True, help="FlowContent Auto project directory.")
-    parser.add_argument("--max-words", type=int, default=8, help="Maximum words per caption cue.")
-    parser.add_argument("--max-asset-ms", type=int, default=8000, help="Maximum duration of each asset cue.")
+    parser.add_argument(
+        "--asset-mode",
+        choices=["words", "seconds", "pause"],
+        default="pause",
+        help="How to segment the asset SRT.",
+    )
+    parser.add_argument("--asset-value", type=int, required=True, help="Numeric value for the selected asset segmentation mode.")
     parser.add_argument(
         "--pause-ms",
         type=int,
@@ -88,10 +95,12 @@ def main() -> int:
         raise RuntimeError(f"audio file not found: {audio_path}")
     if audio_path.suffix.lower() not in SUPPORTED_AUDIO_EXTENSIONS:
         raise RuntimeError(f"unsupported audio extension: {audio_path.suffix}")
-    if args.max_words < 1:
-        raise RuntimeError("max words must be positive")
-    if args.max_asset_ms < 1 or args.max_asset_ms > 8000:
-        raise RuntimeError("asset maximum duration must be between 1 and 8000 ms")
+    if args.asset_value < 1:
+        raise RuntimeError("asset segmentation value must be positive")
+    if args.asset_mode == "seconds" and args.asset_value > 8:
+        raise RuntimeError("asset maximum duration must be between 1 and 8 seconds")
+    if args.asset_mode == "pause" and args.asset_value > 10_000:
+        raise RuntimeError("pause threshold must be between 1 and 10000 ms")
 
     audio_dir = project_root / "audio"
     srt_dir = project_root / "srt"
@@ -108,17 +117,29 @@ def main() -> int:
 
     transcript = transcribe(audio_path, read_api_keys(key_file))
     words = normalize_words(transcript.words)
-    caption_segments = segment_captions(words, args.max_words)
+    caption_max_words = args.asset_value if args.asset_mode == "words" else 7
+    caption_segments = segment_captions(words, caption_max_words)
     audio_duration = getattr(transcript, "audio_duration", None)
     timeline_end_ms = round(float(audio_duration) * 1000) if audio_duration else words[-1].end
-    asset_segments = segment_assets(
-        words,
-        args.max_asset_ms,
-        args.pause_ms,
-        args.transition_mode,
-        timeline_start_ms=0,
-        timeline_end_ms=timeline_end_ms,
-    )
+    if args.asset_mode == "words":
+        asset_segments = segment_assets_by_word_count(words, args.asset_value)
+        max_asset_duration_ms = max(segment.duration_ms for segment in asset_segments)
+        pause_threshold_ms = DEFAULT_PAUSE_THRESHOLD_MS
+    elif args.asset_mode == "seconds":
+        max_asset_duration_ms = args.asset_value * 1000
+        asset_segments = segment_assets_by_duration(words, max_asset_duration_ms)
+        pause_threshold_ms = DEFAULT_PAUSE_THRESHOLD_MS
+    else:
+        max_asset_duration_ms = 8000
+        pause_threshold_ms = args.asset_value
+        asset_segments = segment_assets(
+            words,
+            max_asset_duration_ms,
+            pause_threshold_ms,
+            args.transition_mode,
+            timeline_start_ms=0,
+            timeline_end_ms=timeline_end_ms,
+        )
     base_name = audio_path.stem
 
     caption_path = srt_dir / f"{base_name}.legendas.srt"
@@ -132,11 +153,13 @@ def main() -> int:
         words=words,
         captions=caption_segments,
         assets=asset_segments,
-        max_words=args.max_words,
-        max_asset_duration_ms=args.max_asset_ms,
+        max_words=caption_max_words,
+        max_asset_duration_ms=max_asset_duration_ms,
         min_asset_duration_ms=MIN_ASSET_DURATION_MS,
-        pause_threshold_ms=args.pause_ms,
+        pause_threshold_ms=pause_threshold_ms,
         transition_mode=args.transition_mode,
+        asset_segmentation_mode=args.asset_mode,
+        asset_segmentation_value=args.asset_value,
         language_code=getattr(transcript, "language_code", None),
     )
     write_manifest(str(manifest_path), manifest)
@@ -149,6 +172,9 @@ def main() -> int:
         "captionCount": len(caption_segments),
         "assetCount": len(asset_segments),
         "languageCode": getattr(transcript, "language_code", None),
+        "maxAssetDurationMs": max_asset_duration_ms,
+        "assetSegmentationMode": args.asset_mode,
+        "assetSegmentationValue": args.asset_value,
     }
     print(json.dumps(result, ensure_ascii=False))
     return 0

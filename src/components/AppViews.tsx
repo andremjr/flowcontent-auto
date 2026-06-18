@@ -2,14 +2,14 @@ import { useState } from "react";
 import type { AssemblyAiStatus, FlowBridgeStatus, ProjectSummary } from "../types";
 
 const stageLabels: Record<string, string> = {
-  AWAITING_AUDIO: "Aguardando áudio",
+  AWAITING_AUDIO: "Aguardando Ã¡udio",
   AWAITING_PROMPTS: "Aguardando prompts",
   READY_FOR_FLOW: "Pronto para o Flow",
   GENERATING_ASSETS: "Gerando assets",
 };
 
 function basename(path: string | null) {
-  if (!path) return "Ainda não gerado";
+  if (!path) return "Ainda nÃ£o gerado";
   return path.split(/[\\/]/).pop() ?? path;
 }
 
@@ -25,7 +25,7 @@ function ProjectStrip({
   if (!projects.length) return null;
   return (
     <div className="project-strip">
-      <span>PRODUÇÃO</span>
+      <span>PRODUÃ‡ÃƒO</span>
       {projects.map((project) => (
         <button
           className={project.localProjectId === selected?.localProjectId ? "active" : ""}
@@ -42,7 +42,7 @@ function ProjectStrip({
 function EmptyModule({ title, description, action, onAction }: { title: string; description: string; action: string; onAction: () => void }) {
   return (
     <div className="module-empty">
-      <span>▶</span>
+      <span>â–¶</span>
       <h2>{title}</h2>
       <p>{description}</p>
       <button className="secondary-button" onClick={onAction}>{action}</button>
@@ -69,41 +69,41 @@ export function OverviewView({
     <section className="module-page">
       <div className="module-hero">
         <div>
-          <span className="section-kicker">MESA DE PRODUÇÃO</span>
-          <h2>Da narração aos assets, sem perder a ordem.</h2>
-          <p>Acompanhe o próximo passo de cada produção e entre direto no ponto que precisa de atenção.</p>
+          <span className="section-kicker">MESA DE PRODUÃ‡ÃƒO</span>
+          <h2>Da narraÃ§Ã£o aos assets, sem perder a ordem.</h2>
+          <p>Acompanhe o prÃ³ximo passo de cada produÃ§Ã£o e entre direto no ponto que precisa de atenÃ§Ã£o.</p>
         </div>
-        <button className="dispatch-button" onClick={onCreate}><span className="mini-play">▶</span> Nova produção</button>
+        <button className="dispatch-button" onClick={onCreate}><span className="mini-play">â–¶</span> Nova produÃ§Ã£o</button>
       </div>
       <div className="metric-ribbon">
-        <div><small>PRODUÇÕES</small><strong>{projects.length}</strong><span>pastas locais</span></div>
+        <div><small>PRODUÃ‡Ã•ES</small><strong>{projects.length}</strong><span>pastas locais</span></div>
         <div><small>SLOTS NARRATIVOS</small><strong>{totalAssets}</strong><span>ordem preservada</span></div>
         <div><small>PRONTAS PARA FLOW</small><strong>{ready}</strong><span>prompts validados</span></div>
-        <div><small>PONTE FLOW</small><strong className={bridgeConnected ? "bridge-on-value" : "hold-value"}>{bridgeConnected ? "ON" : "OFF"}</strong><span>{bridgeConnected ? "extensão conectada" : "extensão desconectada"}</span></div>
+        <div><small>PONTE FLOW</small><strong className={bridgeConnected ? "bridge-on-value" : "hold-value"}>{bridgeConnected ? "ON" : "OFF"}</strong><span>{bridgeConnected ? "extensÃ£o conectada" : "extensÃ£o desconectada"}</span></div>
       </div>
       <div className="overview-grid">
         <section className="module-card span-two">
-          <div className="module-card-head"><div><span className="section-kicker">PRÓXIMAS AÇÕES</span><h3>Fila de trabalho</h3></div></div>
+          <div className="module-card-head"><div><span className="section-kicker">PRÃ“XIMAS AÃ‡Ã•ES</span><h3>Fila de trabalho</h3></div></div>
           <div className="action-list">
             {projects.map((project) => (
               <button key={project.localProjectId} onClick={() => {
                 onSelect(project.localProjectId);
                 onNavigate(project.stage === "AWAITING_AUDIO" ? "sincronizacao" : "producoes");
               }}>
-                <span className="action-index">▶</span>
+                <span className="action-index">â–¶</span>
                 <span><strong>{project.title}</strong><small>{stageLabels[project.stage]}</small></span>
-                <em>{project.assetCount || "—"} slots</em>
+                <em>{project.assetCount || "â€”"} slots</em>
               </button>
             ))}
-            {!projects.length && <p className="inline-empty">Crie uma produção para iniciar a fila de trabalho.</p>}
+            {!projects.length && <p className="inline-empty">Crie uma produÃ§Ã£o para iniciar a fila de trabalho.</p>}
           </div>
         </section>
         <section className="module-card">
-          <div className="module-card-head"><div><span className="section-kicker">GUARDRAILS</span><h3>Operação protegida</h3></div><span className="panel-state done">ATIVO</span></div>
+          <div className="module-card-head"><div><span className="section-kicker">GUARDRAILS</span><h3>OperaÃ§Ã£o protegida</h3></div><span className="panel-state done">ATIVO</span></div>
           <div className="status-stack">
-            <span><i className="ok" /><strong>Token local</strong><small>Sessão autenticada</small></span>
-            <span><i className="ok" /><strong>Fila conservadora</strong><small>1 envio por vez</small></span>
-            <span><i className={bridgeConnected ? "ok" : ""} /><strong>Extensão Flow</strong><small>{bridgeConnected ? "Heartbeat local ativo" : "Ainda não conectada"}</small></span>
+            <span><i className="ok" /><strong>Token local</strong><small>SessÃ£o autenticada</small></span>
+            <span><i className="ok" /><strong>Fila configurÃ¡vel</strong><small>ConcorrÃªncia definida por execuÃ§Ã£o</small></span>
+            <span><i className={bridgeConnected ? "ok" : ""} /><strong>ExtensÃ£o Flow</strong><small>{bridgeConnected ? "Heartbeat local ativo" : "Ainda nÃ£o conectada"}</small></span>
           </div>
         </section>
       </div>
@@ -117,6 +117,12 @@ export function SynchronizationView({
   onSelect,
   busy,
   pendingAudioPath,
+  assetSrtMode,
+  onAssetSrtModeChange,
+  assetSrtValue,
+  onAssetSrtValueChange,
+  transitionMode,
+  onTransitionModeChange,
   onChooseAudio,
   onProcessAudio,
   onDownload,
@@ -127,6 +133,12 @@ export function SynchronizationView({
   onSelect: (id: string) => void;
   busy: boolean;
   pendingAudioPath: string | null;
+  assetSrtMode: string;
+  onAssetSrtModeChange: (value: string) => void;
+  assetSrtValue: number;
+  onAssetSrtValueChange: (value: number) => void;
+  transitionMode: string;
+  onTransitionModeChange: (value: string) => void;
   onChooseAudio: () => void;
   onProcessAudio: () => void;
   onDownload: (kind: "captions" | "assets") => void;
@@ -139,40 +151,78 @@ export function SynchronizationView({
     <section className="module-page simple-page">
       <ProjectStrip projects={projects} selected={selected} onSelect={onSelect} />
       {!selected ? (
-        <EmptyModule title="Crie uma produção primeiro" description="Dê um nome ao trabalho e depois envie o áudio." action="Criar produção" onAction={() => onNavigate("producoes")} />
+        <EmptyModule title="Crie uma produÃ§Ã£o primeiro" description="DÃª um nome ao trabalho e depois envie o Ã¡udio." action="Criar produÃ§Ã£o" onAction={() => onNavigate("producoes")} />
       ) : (
         <>
           <div className="simple-step">
             <div className="step-number">01</div>
             <div className="step-copy">
-              <span className="section-kicker">SINCRONIZAÇÃO SRT</span>
-              <h2>{hasGeneratedSrts ? "SRTs prontos para baixar" : pendingAudioPath ? "Áudio pronto para processar" : "Envie a narração"}</h2>
-              <p>{hasGeneratedSrts ? "Baixe os dois arquivos. Use o SRT de assets para criar os prompts em sua ferramenta preferida." : pendingAudioPath ? "O áudio foi selecionado. Revise o arquivo e depois gere os dois SRTs." : "Selecione o áudio da narração. Os arquivos SRT e o áudio copiado ficam salvos dentro da pasta local da produção."}</p>
-              <p>Regra atual dos assets: pausa padrão de 100ms, duração mínima efetiva de 3s e duração máxima de 8s.</p>
-              <p><strong>Áudio salvo no projeto:</strong> {basename(currentAudioPath)}</p>
+              <span className="section-kicker">SINCRONIZAÃ‡ÃƒO SRT</span>
+              <h2>{hasGeneratedSrts ? "SRTs prontos para baixar" : pendingAudioPath ? "Ãudio pronto para processar" : "Envie a narraÃ§Ã£o"}</h2>
+              <p>{hasGeneratedSrts ? "Baixe os dois arquivos. Use o SRT de assets para criar os prompts em sua ferramenta preferida." : pendingAudioPath ? "O Ã¡udio foi selecionado. Revise o arquivo e depois gere os dois SRTs." : "Selecione o Ã¡udio da narraÃ§Ã£o. Os arquivos SRT e o Ã¡udio copiado ficam salvos dentro da pasta local da produÃ§Ã£o."}</p>
+              <p>Escolha um Ãºnico critÃ©rio para montar o SRT de assets: palavras, segundos ou pausa. No modo por pausa, o sistema ainda respeita o teto tÃ©cnico de 8s por asset quando necessÃ¡rio.</p>
+              <p><strong>Ãudio salvo no projeto:</strong> {basename(currentAudioPath)}</p>
             </div>
-            <div className="session-actions">
-              <button className="secondary-button" disabled={busy} onClick={onChooseAudio}>
-                {currentAudioPath ? "Trocar áudio" : "Selecionar áudio"}
-              </button>
-              <button className="dispatch-button" disabled={busy || !currentAudioPath} onClick={onProcessAudio}>
-                <span className="mini-play">▶</span>{busy ? "Gerando SRTs..." : "Gerar SRT"}
-              </button>
+            <div className="session-actions" style={{ alignItems: "stretch" }}>
+              <div style={{ display: "grid", gap: "10px", minWidth: "280px" }}>
+                <label>
+                  <span>CritÃ©rio do SRT de assets</span>
+                  <select value={assetSrtMode} onChange={(event) => onAssetSrtModeChange(event.target.value)}>
+                    <option value="words">Por palavras</option>
+                    <option value="seconds">Por segundos</option>
+                    <option value="pause">Por pausa</option>
+                  </select>
+                </label>
+                <label>
+                  <span>
+                    {assetSrtMode === "words"
+                      ? "Quantidade de palavras"
+                      : assetSrtMode === "seconds"
+                        ? "Quantidade de segundos"
+                        : "Quantidade de milissegundos"}
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={assetSrtMode === "seconds" ? 8 : assetSrtMode === "pause" ? 10000 : 100}
+                    value={assetSrtValue}
+                    onChange={(event) => onAssetSrtValueChange(Number(event.target.value) || 1)}
+                  />
+                </label>
+                {assetSrtMode === "pause" && (
+                  <label>
+                    <span>Troca visual durante a pausa</span>
+                    <select value={transitionMode} onChange={(event) => onTransitionModeChange(event.target.value)}>
+                      <option value="midpoint">No meio da pausa</option>
+                      <option value="next-speech">No inÃ­cio da prÃ³xima fala</option>
+                      <option value="previous-speech">No fim da fala anterior</option>
+                    </select>
+                  </label>
+                )}
+              </div>
+              <div className="session-actions">
+                <button className="secondary-button" disabled={busy} onClick={onChooseAudio}>
+                  {currentAudioPath ? "Trocar Ã¡udio" : "Selecionar Ã¡udio"}
+                </button>
+                <button className="dispatch-button" disabled={busy || !currentAudioPath} onClick={onProcessAudio}>
+                  <span className="mini-play">â–¶</span>{busy ? "Gerando SRTs..." : "Gerar SRT"}
+                </button>
+              </div>
             </div>
           </div>
           {hasGeneratedSrts && (
             <div className="download-list">
               <article>
                 <span className="file-mark">CC</span>
-                <div><strong>SRT de legendas</strong><small>{basename(selected.captionSrtPath)}</small><p>Para adicionar legendas ao vídeo final.</p></div>
+                <div><strong>SRT de legendas</strong><small>{basename(selected.captionSrtPath)}</small><p>Para adicionar legendas ao vÃ­deo final.</p></div>
                 <button className="secondary-button" onClick={() => onDownload("captions")}>Baixar SRT</button>
               </article>
               <article>
                 <span className="file-mark asset">A8</span>
-                <div><strong>SRT de assets</strong><small>{basename(selected.assetSrtPath)}</small><p>{selected.assetCount} intervalos para gerar os prompts visuais, com mínimo de 3s e máximo de 8s por asset.</p></div>
+                <div><strong>SRT de assets</strong><small>{basename(selected.assetSrtPath)}</small><p>{selected.assetCount} intervalos para gerar os prompts visuais com o critÃ©rio selecionado.</p></div>
                 <button className="secondary-button" onClick={() => onDownload("assets")}>Baixar SRT</button>
               </article>
-              <button className="quiet-button next-step-button" onClick={() => onNavigate("producoes")}>Já tenho os prompts, continuar para Produções →</button>
+              <button className="quiet-button next-step-button" onClick={() => onNavigate("producoes")}>JÃ¡ tenho os prompts, continuar para ProduÃ§Ãµes â†’</button>
             </div>
           )}
         </>
@@ -207,18 +257,18 @@ export function SessionsView({
   return (
     <section className="module-page simple-page settings-page">
       <div className="step-copy">
-        <span className="section-kicker">CONFIGURAÇÕES</span>
-        <h2>Integrações</h2>
-        <p>Essas configurações são feitas uma vez. Durante o trabalho, o navegador Flow permanece minimizado.</p>
+        <span className="section-kicker">CONFIGURAÃ‡Ã•ES</span>
+        <h2>IntegraÃ§Ãµes</h2>
+        <p>Essas configuraÃ§Ãµes sÃ£o feitas uma vez. Durante o trabalho, o navegador Flow permanece minimizado.</p>
       </div>
       <section className="module-card simple-setting-card">
         <div>
           <span className={`pulse-dot ${bridge.extensionConnected ? "" : "offline"}`} />
-          <span><strong>Ponte com Google Flow</strong><small>{bridge.extensionConnected ? "Conectada e pronta para receber comandos" : bridge.extensionInstalled ? "Extensão instalada; reconecte a sessão" : "Instalação inicial necessária"}</small></span>
+          <span><strong>Ponte com Google Flow</strong><small>{bridge.extensionConnected ? "Conectada e pronta para receber comandos" : bridge.extensionInstalled ? "ExtensÃ£o instalada; reconecte a sessÃ£o" : "InstalaÃ§Ã£o inicial necessÃ¡ria"}</small></span>
         </div>
         <div className="session-actions">
           <button className="quiet-button" onClick={onRefresh}>Atualizar</button>
-          <button className="secondary-button" disabled={busy} onClick={onOpenBrowser}>{busy ? "Abrindo..." : bridge.extensionConnected ? "Reabrir sessão" : "Conectar Flow"}</button>
+          <button className="secondary-button" disabled={busy} onClick={onOpenBrowser}>{busy ? "Abrindo..." : bridge.extensionConnected ? "Reabrir sessÃ£o" : "Conectar Flow"}</button>
         </div>
       </section>
       <section className="module-card integration-card">

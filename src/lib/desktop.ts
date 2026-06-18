@@ -110,6 +110,14 @@ export async function createProject(title: string, flowProjectId: string | null)
   return invoke<ProjectSummary>("create_project", { title, flowProjectId });
 }
 
+export async function createProjectWithOptions(
+  title: string,
+  flowProjectId: string | null,
+  assetOutputDir: string | null,
+): Promise<ProjectSummary> {
+  return invoke<ProjectSummary>("create_project", { title, flowProjectId, assetOutputDir });
+}
+
 export async function deleteProject(localProjectId: string): Promise<boolean> {
   return invoke<boolean>("delete_project", { localProjectId });
 }
@@ -126,6 +134,7 @@ export async function queueProjectGeneration(
   localProjectId: string,
   mode: GenerationMode,
   settings: GenerationSettings,
+  maxConcurrent: number,
   sourceOrders?: number[] | null,
   strategy: "continue" | "restart" = "continue",
 ): Promise<string> {
@@ -137,17 +146,24 @@ export async function queueProjectGeneration(
     i2vModel: settings.i2vModel,
     imageAspectRatio: settings.imageAspectRatio,
     videoAspectRatio: settings.videoAspectRatio,
+    maxConcurrent,
     sourceOrders,
     generationStrategy: strategy,
   });
 }
 
-export async function queueProjectAnimation(localProjectId: string, sourceOrders: number[] | null, settings: GenerationSettings): Promise<string> {
+export async function queueProjectAnimation(
+  localProjectId: string,
+  sourceOrders: number[] | null,
+  settings: GenerationSettings,
+  maxConcurrent: number,
+): Promise<string> {
   return invoke<string>("queue_project_animation", {
     localProjectId,
     sourceOrders,
     i2vModel: settings.i2vModel,
     videoAspectRatio: settings.videoAspectRatio,
+    maxConcurrent,
   });
 }
 
@@ -221,18 +237,43 @@ export async function chooseAudio(): Promise<string | null> {
   }
 }
 
+export async function chooseDirectory(defaultPath?: string | null): Promise<string | null> {
+  const startedAt = performance.now();
+  recordDiagnostic("file-dialog-open", { kind: "directory" });
+  try {
+    const selection = await open({
+      multiple: false,
+      directory: true,
+      defaultPath: defaultPath ?? undefined,
+    });
+    recordDiagnostic("file-dialog-close", {
+      kind: "directory",
+      selected: typeof selection === "string",
+      durationMs: Math.round(performance.now() - startedAt),
+    });
+    return typeof selection === "string" ? selection : null;
+  } catch (error) {
+    recordDiagnostic("file-dialog-error", {
+      kind: "directory",
+      durationMs: Math.round(performance.now() - startedAt),
+      error,
+    }, "error");
+    throw error;
+  }
+}
+
 export async function processProjectAudio(
   projectRoot: string,
   audioPath: string,
-  maxWords: number,
-  pauseMs: number,
+  assetMode: string,
+  assetValue: number,
   transitionMode: string,
 ): Promise<AudioProcessResult> {
   return invoke<AudioProcessResult>("process_audio", {
     projectRoot,
     audioPath,
-    maxWords,
-    pauseMs,
+    assetMode,
+    assetValue,
     transitionMode,
   });
 }

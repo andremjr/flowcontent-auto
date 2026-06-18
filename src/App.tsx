@@ -141,6 +141,15 @@ export default function App() {
     setDeleteTarget,
     title,
     setTitle,
+    assetSrtMode,
+    setAssetSrtMode,
+    assetSrtValue,
+    setAssetSrtValue,
+    transitionMode,
+    setTransitionMode,
+    assetOutputDir,
+    generationConcurrency,
+    setGenerationConcurrency,
     promptText,
     setPromptText,
     promptCount,
@@ -174,6 +183,7 @@ export default function App() {
     handleInstallUpdate,
     handleCreate,
     handleDelete,
+    handleChooseAssetOutputDir,
     handleChooseAudio,
     handleAudio,
     refreshBridge,
@@ -316,6 +326,7 @@ export default function App() {
                       <span className="section-kicker">PRODUÇÃO</span>
                       <h2>{selected.title}</h2>
                       <p>{projectPromptTotal(selected)} prompts esperados</p>
+                      <p>Pasta final dos assets: {selected.assetOutputDir}</p>
                     </div>
                     <div className="production-title-actions">
                       <div className="flow-link-state">
@@ -419,6 +430,16 @@ export default function App() {
                         </div>
 
                         <div className="generation-settings">
+                          <label className="gen-setting">
+                            <span>GeraÃ§Ãµes simultÃ¢neas</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={4}
+                              value={generationConcurrency}
+                              onChange={(e) => setGenerationConcurrency(Math.max(1, Math.min(4, Number(e.target.value) || 1)))}
+                            />
+                          </label>
                           <span className="section-kicker">CONFIGURAÇÕES</span>
                           {(generationMode === "IMAGE" || generationMode === "IMAGE_TO_VIDEO") && (
                             <label className="gen-setting">
@@ -775,6 +796,12 @@ export default function App() {
               onSelect={setSelectedId}
               busy={busy === "audio"}
               pendingAudioPath={selected ? (pendingAudioByProject[selected.localProjectId] ?? null) : null}
+              assetSrtMode={assetSrtMode}
+              onAssetSrtModeChange={setAssetSrtMode}
+              assetSrtValue={assetSrtValue}
+              onAssetSrtValueChange={setAssetSrtValue}
+              transitionMode={transitionMode}
+              onTransitionModeChange={setTransitionMode}
               onChooseAudio={handleChooseAudio}
               onProcessAudio={handleAudio}
               onDownload={handleDownloadSrt}
@@ -806,6 +833,10 @@ export default function App() {
             </div>
             <label>Nome da produção<input autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ex.: Documentário Aurora" /></label>
             <p className="dialog-note">O projeto correspondente será criado no Flow e vinculado automaticamente quando a ponte estiver conectada.</p>
+            <div className="folder-preview"><span>PASTA FINAL DOS ASSETS</span><code>{assetOutputDir || "Usar downloads dentro da pasta local da produÃ§Ã£o"}</code></div>
+            <div className="dialog-actions">
+              <button className="quiet-button" onClick={handleChooseAssetOutputDir}>Escolher pasta final</button>
+            </div>
             <div className="folder-preview"><span>PASTA LOCAL</span><code>Documentos\FlowContent Auto\{title ? title.toLowerCase().replace(/\s+/g, "-") : "nome-da-producao"}</code></div>
             <div className="dialog-actions">
               <button className="quiet-button" onClick={() => setCreateOpen(false)}>Cancelar</button>

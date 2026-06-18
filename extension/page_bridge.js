@@ -110,6 +110,18 @@
 
   const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
   const normalize = (value) => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+
+  async function readJsonResponse(response, label) {
+    const raw = await response.text().catch(() => "");
+    if (!raw.trim()) {
+      return { payload: null, raw: "" };
+    }
+    try {
+      return { payload: JSON.parse(raw), raw };
+    } catch (err) {
+      throw new Error(`${label} retornou uma resposta nao-JSON ou vazia (status ${response.status}).`);
+    }
+  }
   
   const visible = (element) => {
     if (!(element instanceof HTMLElement)) return false;
@@ -174,7 +186,7 @@
     });
     
     pbLog("Resposta do fetch de createProject recebida, status:", response.status);
-    const payload = await response.json().catch(() => null);
+    const { payload } = await readJsonResponse(response, "project.createProject");
     pbLog("Payload retornado do createProject:", payload);
     
     if (!response.ok) {
@@ -279,7 +291,7 @@
       throw new Error(`Erro API Imagem (${response.status}): ${errText}`);
     }
 
-    const payload = await response.json();
+    const { payload } = await readJsonResponse(response, "batchGenerateImages");
     const mediaItem = payload?.media?.[0];
     if (!mediaItem || !mediaItem.name) {
       throw new Error(`Resposta de imagem invalida ou vazia.`);
@@ -359,7 +371,7 @@
       throw new Error(`Erro API VideoTexto (${response.status}): ${errText}`);
     }
 
-    const payload = await response.json();
+    const { payload } = await readJsonResponse(response, "batchAsyncGenerateVideoText");
     const mediaItem = payload?.media?.[0];
     if (!mediaItem || !mediaItem.name) {
       throw new Error(`Resposta de video texto invalida ou vazia.`);
@@ -442,7 +454,7 @@
       throw new Error(`Erro API VideoImagem (${response.status}): ${errText}`);
     }
 
-    const payload = await response.json();
+    const { payload } = await readJsonResponse(response, "batchAsyncGenerateVideoStartImage");
     const mediaItem = payload?.media?.[0];
     if (!mediaItem || !mediaItem.name) {
       throw new Error(`Resposta de video imagem invalida ou vazia.`);
@@ -505,7 +517,7 @@
         const errText = await response.text().catch(() => "");
         pbError(`Erro ao consultar status (${response.status}): ${errText}. Retentando...`);
       } else {
-        const payload = await response.json();
+        const { payload } = await readJsonResponse(response, "batchCheckAsyncVideoGenerationStatus");
         const mediaItem = payload?.media?.[0];
         const status = mediaItem?.mediaMetadata?.mediaStatus?.mediaGenerationStatus;
         

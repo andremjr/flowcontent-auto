@@ -4,8 +4,9 @@ import {
   authenticate,
   checkForUpdate,
   chooseAudio,
+  chooseDirectory,
   clearAssemblyAiKeys,
-  createProject,
+  createProjectWithOptions,
   deleteProject,
   downloadProjectSrt,
   ensureFlowProjectLink,
@@ -87,10 +88,12 @@ export function useAppController() {
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProjectSummary | null>(null);
   const [title, setTitle] = useState("");
-  const [maxWords, setMaxWords] = useState(7);
-  const [pauseMs, setPauseMs] = useState(100);
+  const [assetSrtMode, setAssetSrtMode] = useState("pause");
+  const [assetSrtValue, setAssetSrtValue] = useState(100);
   const [transitionMode, setTransitionMode] = useState("midpoint");
+  const [assetOutputDir, setAssetOutputDir] = useState("");
   const [promptText, setPromptText] = useState("");
+  const [generationConcurrency, setGenerationConcurrency] = useState(2);
   const [generationMode, setGenerationMode] = useState<GenerationMode>("IMAGE_TO_VIDEO");
   const [generationSettings, setGenerationSettings] = useState<GenerationSettings>({
     imageModel: "GEM_PIX_2",
@@ -243,6 +246,31 @@ export function useAppController() {
     setPromptText(detail.prompts.map((assignment) => assignment.prompt).join("\n"));
     setDownloadedAssets(detail.downloadedAssets ?? []);
     setGenerationSlots((detail.generationSlots ?? []).map((slot) => normalizeGenerationSlot(slot)));
+    const settings = detail.production?.settings;
+    if (settings && typeof settings === "object" && !Array.isArray(settings)) {
+      const typedSettings = settings as Record<string, unknown>;
+      const nextAssetMode = typedSettings.assetSegmentationMode;
+      const nextAssetValue = Number(typedSettings.assetSegmentationValue);
+      const nextPauseMs = Number(typedSettings.pauseThresholdMs);
+      const nextTransitionMode = typedSettings.transitionMode;
+      if (typeof nextAssetMode === "string" && nextAssetMode) {
+        setAssetSrtMode(nextAssetMode);
+      }
+      if (Number.isFinite(nextAssetValue) && nextAssetValue > 0) {
+        setAssetSrtValue(nextAssetValue);
+      } else if (Number.isFinite(nextPauseMs) && nextPauseMs > 0) {
+        setAssetSrtMode("pause");
+        setAssetSrtValue(nextPauseMs);
+      }
+      if (typeof nextTransitionMode === "string" && nextTransitionMode) setTransitionMode(nextTransitionMode);
+    }
+    const generationState = detail.production?.generationState;
+    if (generationState && typeof generationState === "object" && !Array.isArray(generationState)) {
+      const nextConcurrency = Number((generationState as Record<string, unknown>).maxConcurrent);
+      if (Number.isFinite(nextConcurrency) && nextConcurrency > 0) {
+        setGenerationConcurrency(Math.max(1, Math.min(4, Math.round(nextConcurrency))));
+      }
+    }
   };
 
   const refreshSelectedProjectRuntime = async () => {
@@ -688,9 +716,10 @@ export function useAppController() {
   const handleCreate = async () => {
     try {
       setBusy("create");
-      const project = await createProject(title, null);
+      const project = await createProjectWithOptions(title, null, assetOutputDir.trim() || null);
       await refreshProjects(project.localProjectId);
       setTitle("");
+      setAssetOutputDir("");
       setCreateOpen(false);
       setActiveSection("sincronizacao");
       setToast("Produção criada. A ponte criará e vinculará o projeto Flow automaticamente.");
@@ -698,6 +727,17 @@ export function useAppController() {
       setToast(messageFrom(error));
     } finally {
       setBusy("");
+    }
+  };
+
+  const handleChooseAssetOutputDir = async () => {
+    try {
+      const selectedPath = await chooseDirectory(assetOutputDir || null);
+      if (selectedPath) {
+        setAssetOutputDir(selectedPath);
+      }
+    } catch (error) {
+      setToast(messageFrom(error));
     }
   };
 
@@ -777,8 +817,8 @@ export function useAppController() {
       const result = await processProjectAudio(
         selected.projectRoot,
         audioPath,
-        maxWords,
-        pauseMs,
+        assetSrtMode,
+        assetSrtValue,
         transitionMode,
       );
       await refreshProjects(selected.localProjectId);
@@ -869,6 +909,7 @@ export function useAppController() {
         selected.localProjectId,
         generationMode,
         generationSettings,
+        generationConcurrency,
         null,
         "continue",
       );
@@ -897,6 +938,7 @@ export function useAppController() {
         selected.localProjectId,
         generationMode,
         generationSettings,
+        generationConcurrency,
         null,
         "restart",
       );
@@ -955,7 +997,12 @@ export function useAppController() {
     if (!selected || animatableSourceOrders.length === 0) return;
     try {
       setBusy("animate");
-      const message = await queueProjectAnimation(selected.localProjectId, animatableSourceOrders, generationSettings);
+      const message = await queueProjectAnimation(
+        selected.localProjectId,
+        animatableSourceOrders,
+        generationSettings,
+        generationConcurrency,
+      );
       setToast(message);
     } catch (error) {
       setToast(messageFrom(error));
@@ -973,8 +1020,8 @@ export function useAppController() {
         throw new Error(`Slot ${sourceOrder} não encontrado.`);
       }
       const message = canAnimateSlot(slot)
-        ? await queueProjectAnimation(selected.localProjectId, [sourceOrder], generationSettings)
-        : await queueProjectGeneration(selected.localProjectId, "IMAGE_TO_VIDEO", generationSettings, [sourceOrder], "continue");
+        ? await queueProjectAnimation(selected.localProjectId, [sourceOrder], generationSettings, generationConcurrency)
+        : await queueProjectGeneration(selected.localProjectId, "IMAGE_TO_VIDEO", generationSettings, generationConcurrency, [sourceOrder], "continue");
       setToast(message);
     } catch (error) {
       setToast(messageFrom(error));
@@ -1003,8 +1050,8 @@ export function useAppController() {
     try {
       setBusy(`retry-${slot.sourceOrder}`);
       const message = canAnimateSlot(slot)
-        ? await queueProjectAnimation(selected.localProjectId, [slot.sourceOrder], generationSettings)
-        : await queueProjectGeneration(selected.localProjectId, generationMode, generationSettings, [slot.sourceOrder], "continue");
+        ? await queueProjectAnimation(selected.localProjectId, [slot.sourceOrder], generationSettings, generationConcurrency)
+        : await queueProjectGeneration(selected.localProjectId, generationMode, generationSettings, generationConcurrency, [slot.sourceOrder], "continue");
       setToast(message);
     } catch (error) {
       setToast(messageFrom(error));
@@ -1102,15 +1149,19 @@ export function useAppController() {
     setDeleteTarget,
     title,
     setTitle,
-    maxWords,
-    setMaxWords,
-    pauseMs,
-    setPauseMs,
+    assetSrtMode,
+    setAssetSrtMode,
+    assetSrtValue,
+    setAssetSrtValue,
     transitionMode,
     setTransitionMode,
+    assetOutputDir,
+    setAssetOutputDir,
     promptText,
     setPromptText,
     promptCount,
+    generationConcurrency,
+    setGenerationConcurrency,
     generationMode,
     setGenerationMode,
     generationSettings,
@@ -1143,6 +1194,7 @@ export function useAppController() {
     handleInstallUpdate,
     handleCreate,
     handleDelete,
+    handleChooseAssetOutputDir,
     handleChooseAudio,
     handleAudio,
     refreshBridge,

@@ -128,6 +128,36 @@ def segment_captions(words: Sequence[Word], max_words: int) -> list[Segment]:
     return segments
 
 
+def segment_assets_by_word_count(words: Sequence[Word], words_per_asset: int) -> list[Segment]:
+    if words_per_asset < 1:
+        raise ValueError("words_per_asset must be positive")
+
+    segments: list[Segment] = []
+    for offset in range(0, len(words), words_per_asset):
+        chunk = words[offset : offset + words_per_asset]
+        segments.append(_make_segment("asset", len(segments) + 1, chunk, "word-limit"))
+    return segments
+
+
+def segment_assets_by_duration(words: Sequence[Word], max_duration_ms: int) -> list[Segment]:
+    if max_duration_ms < 1:
+        raise ValueError("max_duration_ms must be positive")
+
+    segments: list[Segment] = []
+    start_index = 0
+    while start_index < len(words):
+        end_index = start_index
+        while end_index + 1 < len(words):
+            next_duration = words[end_index + 1].end - words[start_index].start
+            if next_duration > max_duration_ms:
+                break
+            end_index += 1
+        chunk = words[start_index : end_index + 1]
+        segments.append(_make_segment("asset", len(segments) + 1, chunk, "duration-limit"))
+        start_index = end_index + 1
+    return segments
+
+
 def pause_between(left: Word, right: Word) -> int:
     return max(0, right.start - left.end)
 
@@ -415,6 +445,8 @@ def build_manifest(
     min_asset_duration_ms: int,
     pause_threshold_ms: int,
     transition_mode: str,
+    asset_segmentation_mode: str,
+    asset_segmentation_value: int,
     language_code: str | None,
 ) -> dict:
     transcript_text = " ".join(word.text for word in words)
@@ -429,6 +461,8 @@ def build_manifest(
             "assetMinDurationMs": min_asset_duration_ms,
             "pauseThresholdMs": pause_threshold_ms,
             "transitionMode": transition_mode,
+            "assetSegmentationMode": asset_segmentation_mode,
+            "assetSegmentationValue": asset_segmentation_value,
             "assetBoundaryPriority": ["pause-size", "time-balance", "punctuation-tiebreaker"],
         },
         "words": [asdict(word) for word in words],

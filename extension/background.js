@@ -54,6 +54,12 @@ function isMissingContentScriptError(err) {
     || message.includes("Could not establish connection");
 }
 
+function isClosedMessageChannelError(err) {
+  const message = err?.message || String(err);
+  return message.includes("message channel closed before a response was received")
+    || message.includes("A listener indicated an asynchronous response");
+}
+
 async function findFlowTab() {
   const tabs = await chrome.tabs.query({ url: "https://labs.google/fx/*" });
   const tab = tabs.find((candidate) => candidate.url && candidate.url.includes("/fx/"));
@@ -131,6 +137,13 @@ async function callPageBridge(id, type, payload = {}) {
         }
       })
       .catch((err) => {
+        if (isClosedMessageChannelError(err)) {
+          clearPendingRequest(
+            id,
+            new Error("A pagina do Flow recarregou, travou ou perdeu a ponte com a extensao durante a operacao. Atualize a aba do Flow e tente novamente.")
+          );
+          return;
+        }
         clearPendingRequest(id, new Error(`content.js nao respondeu: ${err.message}`));
       });
   });

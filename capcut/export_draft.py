@@ -24,7 +24,13 @@ def parse_args() -> argparse.Namespace:
 
 
 def read_json(path: Path) -> Any:
-    return json.loads(path.read_text(encoding="utf-8"))
+    raw = path.read_text(encoding="utf-8")
+    if not raw.strip():
+        raise RuntimeError(f"Arquivo JSON vazio: {path}")
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise RuntimeError(f"JSON invalido em {path}: {error}") from error
 
 
 def write_json(path: Path, payload: Any) -> None:
@@ -139,8 +145,12 @@ def scan_capcut_prototypes(capcut_root: Path) -> dict[str, Any]:
         if not content_path.is_file() or not meta_path.is_file():
             continue
 
-        content = read_json(content_path)
-        meta = read_json(meta_path)
+        try:
+            content = read_json(content_path)
+            meta = read_json(meta_path)
+        except RuntimeError:
+            # CapCut costuma deixar drafts intermediarios ou quebrados; ignore-os e siga usando um draft valido como prototipo.
+            continue
         materials = content.get("materials", {})
         indexed = material_index(materials)
         tracks = {track.get("type"): track for track in content.get("tracks", [])}

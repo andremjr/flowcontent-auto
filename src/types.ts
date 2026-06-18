@@ -27,6 +27,7 @@ export interface ProjectSummary {
   title: string;
   flowProjectId: string | null;
   projectRoot: string;
+  assetOutputDir: string;
   stage: ProductionStage;
   assetCount: number;
   promptCount: number;
@@ -44,6 +45,7 @@ export interface AudioProcessResult {
   captionCount: number;
   assetCount: number;
   languageCode: string | null;
+  maxAssetDurationMs: number;
 }
 
 export interface CapcutExportResult {

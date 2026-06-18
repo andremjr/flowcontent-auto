@@ -1358,7 +1358,7 @@ async fn download_asset_to_project(
     asset_extension: &str,
     slot_asset_type: &str,
 ) -> Result<PathBuf, String> {
-    let downloads_dir = project_root.join("downloads");
+    let downloads_dir = project_asset_output_dir(&project_root);
     fs::create_dir_all(&downloads_dir)
         .map_err(|error| format!("Nao foi possivel criar a pasta de downloads: {error}"))?;
 
@@ -1418,7 +1418,7 @@ fn locate_downloaded_asset(
     project_root: &Path,
     source_order: usize,
 ) -> Option<(PathBuf, &'static str)> {
-    let downloads_dir = project_root.join("downloads");
+    let downloads_dir = project_asset_output_dir(project_root);
     if !downloads_dir.is_dir() {
         return None;
     }
@@ -1485,7 +1485,7 @@ fn clear_downloaded_assets_for_orders(
     if target_orders.is_empty() {
         return Ok(());
     }
-    let downloads_dir = project_root.join("downloads");
+    let downloads_dir = project_asset_output_dir(project_root);
     if !downloads_dir.is_dir() {
         return Ok(());
     }
@@ -1549,7 +1549,7 @@ fn reset_generation_slots_for_orders(
 }
 
 fn scan_downloaded_assets(project_root: &Path) -> Vec<DownloadedAssetInfo> {
-    let downloads_dir = project_root.join("downloads");
+    let downloads_dir = project_asset_output_dir(project_root);
     let mut downloaded_assets = Vec::new();
     if !downloads_dir.is_dir() {
         return downloaded_assets;
@@ -1800,7 +1800,12 @@ fn reconcile_production_with_downloads(
         changed |= set_object_field(
             state_obj,
             "maxConcurrent",
-            json!(normalized_queue_concurrency(FLOW_MAX_CONCURRENT)),
+            json!(normalized_queue_concurrency(
+                state_obj
+                    .get("maxConcurrent")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(2) as usize
+            )),
         );
         if remaining_prompts == 0 {
             changed |= set_object_field(state_obj, "active", json!(false));
@@ -2147,6 +2152,20 @@ fn normalized_queue_concurrency(requested: usize) -> usize {
     requested.max(1).min(FLOW_MAX_CONCURRENT)
 }
 
+fn project_asset_output_dir(project_root: &Path) -> PathBuf {
+    let production_path = project_root.join(".flowcontent").join("production.json");
+    if let Ok(production) = read_json(&production_path) {
+        if let Some(path) = production
+            .get("assetOutputDir")
+            .and_then(Value::as_str)
+            .map(PathBuf::from)
+        {
+            return path;
+        }
+    }
+    project_root.join("downloads")
+}
+
 fn load_or_create_bridge_token() -> String {
     let token = Uuid::new_v4().to_string();
     let Some(app_data) = env::var_os("APPDATA") else {
@@ -2206,6 +2225,7 @@ struct ProjectSummary {
     title: String,
     flow_project_id: Option<String>,
     project_root: PathBuf,
+    asset_output_dir: PathBuf,
     stage: String,
     asset_count: usize,
     prompt_count: usize,
@@ -3416,6 +3436,13 @@ fn candidate_workspace_roots(app: &tauri::AppHandle, app_data_dir: &Path) -> Vec
     candidates
 }
 
+fn workspace_root_usable(root: &Path) -> bool {
+    if root.exists() {
+        return true;
+    }
+    root.parent().is_some_and(Path::exists)
+}
+
 fn workspace_config_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
@@ -4147,11 +4174,14 @@ fn merge_generation_slots_for_view(
 
 fn pick_workspace_root(app: &tauri::AppHandle, app_data_dir: &Path) -> PathBuf {
     if let Ok(Some(config)) = load_workspace_config(app) {
-        return config.workspace_root;
+        if workspace_root_usable(&config.workspace_root) {
+            return config.workspace_root;
+        }
     }
     let candidates = candidate_workspace_roots(app, app_data_dir);
     let with_projects = candidates
         .iter()
+        .filter(|root| workspace_root_usable(root))
         .find(|root| {
             let registry_path = root.join(".flowcontent").join("projects.json");
             if !registry_path.is_file() {
@@ -4169,6 +4199,7 @@ fn pick_workspace_root(app: &tauri::AppHandle, app_data_dir: &Path) -> PathBuf {
 
     let with_registry = candidates
         .iter()
+        .filter(|root| workspace_root_usable(root))
         .find(|root| root.join(".flowcontent").join("projects.json").is_file())
         .cloned();
     if let Some(root) = with_registry {
@@ -4177,6 +4208,7 @@ fn pick_workspace_root(app: &tauri::AppHandle, app_data_dir: &Path) -> PathBuf {
 
     let with_flowcontent = candidates
         .iter()
+        .filter(|root| workspace_root_usable(root))
         .find(|root| root.join(".flowcontent").is_dir())
         .cloned();
     if let Some(root) = with_flowcontent {
@@ -4185,6 +4217,7 @@ fn pick_workspace_root(app: &tauri::AppHandle, app_data_dir: &Path) -> PathBuf {
 
     let selected = candidates
         .into_iter()
+        .filter(|root| workspace_root_usable(root))
         .next()
         .unwrap_or_else(|| app_data_dir.join("FlowContent Auto"));
     let _ = save_workspace_config(app, &selected);
@@ -5066,6 +5099,7 @@ fn project_summary(entry: &ProjectEntry) -> Result<ProjectSummary, String> {
     let downloads = scan_downloaded_assets(&entry.project_root);
     let mut changed =
         reconcile_production_with_downloads(&entry.project_root, &mut production, &downloads);
+    let asset_output_dir = project_asset_output_dir(&entry.project_root);
     let srt_root = entry.project_root.join("srt");
     let audio_root = entry.project_root.join("audio");
     let caption_srt_path = production
@@ -5123,6 +5157,7 @@ fn project_summary(entry: &ProjectEntry) -> Result<ProjectSummary, String> {
         title: entry.title.clone(),
         flow_project_id: entry.flow_project_id.clone(),
         project_root: entry.project_root.clone(),
+        asset_output_dir,
         stage: production
             .get("stage")
             .and_then(Value::as_str)
@@ -5472,7 +5507,12 @@ fn restore_generation_queue(
         if mode == "IMAGE_TO_VIDEO" && current_batch_source_orders.is_empty() {
             current_batch_source_orders = source_orders_from_prompts(&restored_all_prompts)
                 .into_iter()
-                .take(normalized_queue_concurrency(FLOW_MAX_CONCURRENT))
+                .take(normalized_queue_concurrency(
+                    generation_state
+                        .get("maxConcurrent")
+                        .and_then(Value::as_u64)
+                        .unwrap_or(2) as usize,
+                ))
                 .collect();
         }
         let queued_prompts = if mode == "IMAGE_TO_VIDEO" {
@@ -5582,7 +5622,7 @@ fn restore_generation_queue(
                 generation_state
                     .get("maxConcurrent")
                     .and_then(Value::as_u64)
-                    .unwrap_or(FLOW_MAX_CONCURRENT as u64) as usize,
+                    .unwrap_or(2) as usize,
             ),
             target_source_orders: effective_target_orders,
             current_batch_source_orders,
@@ -5830,6 +5870,7 @@ fn create_project(
     bridge: State<FlowBridgeState>,
     title: String,
     flow_project_id: Option<String>,
+    asset_output_dir: Option<String>,
 ) -> Result<ProjectSummary, String> {
     require_auth(&auth)?;
     let clean_title = title.trim();
@@ -5858,10 +5899,17 @@ fn create_project(
     let local_project_id = Uuid::new_v4().to_string();
     let project_root = available_project_root(&info.workspace_root, clean_title);
     let metadata_root = project_root.join(".flowcontent");
-    for folder in ["audio", "srt", "prompts", "downloads"] {
+    let selected_asset_output_dir = asset_output_dir
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| project_root.join("downloads"));
+    for folder in ["audio", "srt", "prompts"] {
         fs::create_dir_all(project_root.join(folder))
             .map_err(|error| format!("Nao foi possivel criar a pasta da producao: {error}"))?;
     }
+    fs::create_dir_all(&selected_asset_output_dir)
+        .map_err(|error| format!("Nao foi possivel criar a pasta final dos assets: {error}"))?;
     fs::create_dir_all(&metadata_root)
         .map_err(|error| format!("Nao foi possivel criar os metadados da producao: {error}"))?;
 
@@ -5875,6 +5923,7 @@ fn create_project(
             "flowProjectId": clean_flow_id,
             "createdAt": timestamp,
             "updatedAt": timestamp,
+            "assetOutputDir": selected_asset_output_dir,
             "remoteMediaStoredLocally": false
         }),
     )?;
@@ -5885,6 +5934,7 @@ fn create_project(
             "localProjectId": local_project_id,
             "title": clean_title,
             "stage": "AWAITING_AUDIO",
+            "assetOutputDir": selected_asset_output_dir,
             "createdAt": timestamp,
             "updatedAt": timestamp
         }),
@@ -6106,6 +6156,16 @@ async fn export_capcut_project(
         return Err(message.trim().to_string());
     }
     let stdout = String::from_utf8_lossy(&output.stdout);
+    if stdout.trim().is_empty() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.trim().is_empty() {
+            return Err(
+                "O exportador do CapCut terminou sem retornar dados. Verifique se o CapCut possui ao menos um draft local valido."
+                    .to_string(),
+            );
+        }
+        return Err(stderr.trim().to_string());
+    }
     let result: Value = serde_json::from_str(stdout.trim())
         .map_err(|error| format!("Resposta invalida do exportador do CapCut: {error}"))?;
     update_production(
@@ -6195,6 +6255,7 @@ fn queue_project_generation(
     i2v_model: Option<String>,
     image_aspect_ratio: Option<String>,
     video_aspect_ratio: Option<String>,
+    max_concurrent: Option<usize>,
     source_orders: Option<Vec<usize>>,
     generation_strategy: Option<String>,
 ) -> Result<String, String> {
@@ -6244,6 +6305,7 @@ fn queue_project_generation(
         image_aspect_ratio.unwrap_or_else(|| "IMAGE_ASPECT_RATIO_LANDSCAPE".to_string());
     let vid_ratio =
         video_aspect_ratio.unwrap_or_else(|| "VIDEO_ASPECT_RATIO_LANDSCAPE".to_string());
+    let queue_concurrency = normalized_queue_concurrency(max_concurrent.unwrap_or(2));
 
     let production_path = project_root.join(".flowcontent").join("production.json");
     let mut existing_production = if production_path.exists() {
@@ -6387,7 +6449,7 @@ fn queue_project_generation(
             },
             failed_slots: vec![],
             total_prompts,
-            max_concurrent: normalized_queue_concurrency(FLOW_MAX_CONCURRENT),
+            max_concurrent: queue_concurrency,
             target_source_orders: target_source_orders.clone(),
             current_batch_source_orders: vec![],
             in_flight: HashMap::new(),
@@ -6421,11 +6483,11 @@ fn queue_project_generation(
                 "completedPrompts": completed_orders_count,
                 "failedSlots": Vec::<Value>::new(),
                 "inFlight": Vec::<usize>::new(),
-                "maxConcurrent": normalized_queue_concurrency(FLOW_MAX_CONCURRENT),
+                "maxConcurrent": queue_concurrency,
                 "targetSourceOrders": target_source_orders,
                 "queuedSourceOrders": source_orders_from_prompts(&queued_prompts),
                 "currentBatchSourceOrders": if mode == "IMAGE_TO_VIDEO" {
-                    source_orders_from_prompts(&queued_prompts).into_iter().take(normalized_queue_concurrency(FLOW_MAX_CONCURRENT)).collect::<Vec<usize>>()
+                    source_orders_from_prompts(&queued_prompts).into_iter().take(queue_concurrency).collect::<Vec<usize>>()
                 } else {
                     Vec::<usize>::new()
                 },
@@ -6440,7 +6502,7 @@ fn queue_project_generation(
         local_project_id,
         total_prompts,
         mode,
-        normalized_queue_concurrency(FLOW_MAX_CONCURRENT),
+        queue_concurrency,
         generation_strategy,
         can_continue
     );
@@ -6451,13 +6513,13 @@ fn queue_project_generation(
         format!(
             "Nova geracao iniciada do zero. {} prompt(s) na fila com limite global de {} em voo.",
             total_prompts,
-            normalized_queue_concurrency(FLOW_MAX_CONCURRENT)
+            queue_concurrency
         )
     } else {
         format!(
             "Continuacao iniciada. {} prompt(s) pendente(s) com limite global de {} em voo.",
             total_prompts.saturating_sub(completed_orders_count),
-            normalized_queue_concurrency(FLOW_MAX_CONCURRENT)
+            queue_concurrency
         )
     })
 }
@@ -6652,6 +6714,7 @@ fn queue_project_animation(
     source_orders: Option<Vec<usize>>,
     i2v_model: Option<String>,
     video_aspect_ratio: Option<String>,
+    max_concurrent: Option<usize>,
 ) -> Result<String, String> {
     require_auth(&auth)?;
     let registry = read_registry(&app)?;
@@ -6738,6 +6801,7 @@ fn queue_project_animation(
                 .map(|value| value as usize)
         })
         .collect();
+    let queue_concurrency = normalized_queue_concurrency(max_concurrent.unwrap_or(2));
 
     for source_order in &target_source_orders {
         if let Some(slot) = slots.iter().find(|slot| {
@@ -6790,7 +6854,7 @@ fn queue_project_animation(
             completed_assets: vec![],
             failed_slots: vec![],
             total_prompts: queued_prompts.len(),
-            max_concurrent: normalized_queue_concurrency(FLOW_MAX_CONCURRENT),
+            max_concurrent: queue_concurrency,
             target_source_orders: target_source_orders.clone(),
             current_batch_source_orders: target_source_orders.clone(),
             in_flight: HashMap::new(),
@@ -6818,7 +6882,7 @@ fn queue_project_animation(
                 "completedPrompts": 0,
                 "failedSlots": Vec::<Value>::new(),
                 "inFlight": Vec::<usize>::new(),
-                "maxConcurrent": normalized_queue_concurrency(FLOW_MAX_CONCURRENT),
+                "maxConcurrent": queue_concurrency,
                 "targetSourceOrders": target_source_orders,
                 "queuedSourceOrders": source_orders_from_prompts(&queued_prompts),
                 "currentBatchSourceOrders": source_orders_from_prompts(&queued_prompts),
@@ -6833,7 +6897,7 @@ fn queue_project_animation(
     Ok(format!(
         "Animacao iniciada para {} slot(s), com limite global de {} em voo.",
         queued_prompts.len(),
-        normalized_queue_concurrency(FLOW_MAX_CONCURRENT)
+        queue_concurrency
     ))
 }
 
@@ -6994,8 +7058,8 @@ async fn process_audio(
     auth: State<'_, AuthState>,
     project_root: PathBuf,
     audio_path: PathBuf,
-    max_words: u16,
-    pause_ms: u32,
+    asset_mode: String,
+    asset_value: u16,
     transition_mode: String,
 ) -> Result<Value, String> {
     require_auth(&auth)?;
@@ -7003,10 +7067,18 @@ async fn process_audio(
     if !audio_path.is_file() {
         return Err("Selecione um arquivo de audio valido.".to_string());
     }
-    if max_words == 0 || pause_ms > 10_000 {
-        return Err("As configuracoes de legenda ou pausa sao invalidas.".to_string());
+    if !["words", "seconds", "pause"].contains(&asset_mode.as_str()) {
+        return Err("Modo de segmentacao SRT invalido.".to_string());
     }
-    if !["midpoint", "next-speech", "previous-speech"].contains(&transition_mode.as_str()) {
+    if asset_value == 0
+        || (asset_mode == "seconds" && asset_value > 8)
+        || (asset_mode == "pause" && asset_value > 10_000)
+    {
+        return Err("As configuracoes de segmentacao SRT sao invalidas.".to_string());
+    }
+    if asset_mode == "pause"
+        && !["midpoint", "next-speech", "previous-speech"].contains(&transition_mode.as_str())
+    {
         return Err("Modo de transicao invalido.".to_string());
     }
 
@@ -7022,6 +7094,7 @@ async fn process_audio(
     let audio_path_for_cmd = audio_path.clone();
     let project_root_for_cmd = project_root.clone();
     let transition_mode_for_cmd = transition_mode.clone();
+    let asset_mode_for_cmd = asset_mode.clone();
     let api_key_file_for_cmd = api_key_file.clone();
     let audio_file_name = audio_path
         .file_name()
@@ -7044,12 +7117,16 @@ async fn process_audio(
                 .arg(&audio_path_for_cmd)
                 .arg("--project-root")
                 .arg(&project_root_for_cmd)
-                .arg("--max-words")
-                .arg(max_words.to_string())
-                .arg("--max-asset-ms")
-                .arg("8000")
+                .arg("--asset-mode")
+                .arg(&asset_mode_for_cmd)
+                .arg("--asset-value")
+                .arg(asset_value.to_string())
                 .arg("--pause-ms")
-                .arg(pause_ms.to_string())
+                .arg(if asset_mode_for_cmd == "pause" {
+                    asset_value.to_string()
+                } else {
+                    "100".to_string()
+                })
                 .arg("--transition-mode")
                 .arg(&transition_mode_for_cmd)
                 .arg("--api-key-file")
@@ -7100,11 +7177,13 @@ async fn process_audio(
             "captionCount": result.get("captionCount"),
             "languageCode": result.get("languageCode"),
             "settings": {
-                "captionMaxWords": max_words,
-                "pauseThresholdMs": pause_ms,
+                "captionMaxWords": if asset_mode == "words" { u32::from(asset_value) } else { 7 },
+                "pauseThresholdMs": if asset_mode == "pause" { u32::from(asset_value) } else { 100 },
                 "transitionMode": transition_mode,
                 "assetMinDurationMs": 3000,
-                "assetMaxDurationMs": 8000
+                "assetMaxDurationMs": result.get("maxAssetDurationMs").cloned().unwrap_or(json!(8000)),
+                "assetSegmentationMode": asset_mode,
+                "assetSegmentationValue": asset_value
             }
         }),
     )?;
@@ -7201,7 +7280,7 @@ fn import_prompts(
                 "completedPrompts": 0,
                 "failedSlots": Vec::<Value>::new(),
                 "inFlight": Vec::<usize>::new(),
-                "maxConcurrent": normalized_queue_concurrency(FLOW_MAX_CONCURRENT),
+                "maxConcurrent": normalized_queue_concurrency(2),
                 "remainingPrompts": assignments.len()
             },
             "remoteMediaStoredLocally": false
@@ -7275,7 +7354,8 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        extension_installed_in_profile, handle_bridge_request, token_matches, FlowBridgeState,
+        extension_installed_in_profile, handle_bridge_request, token_matches,
+        workspace_root_usable, FlowBridgeState,
     };
     use serde_json::json;
     use std::{
@@ -7324,6 +7404,34 @@ mod tests {
             &extension_path
         ));
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn accepts_an_existing_workspace_root() {
+        let root = std::env::temp_dir().join(format!("flowcontent-test-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+
+        assert!(workspace_root_usable(&root));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn accepts_a_workspace_root_when_the_parent_exists() {
+        let parent = std::env::temp_dir().join(format!("flowcontent-test-{}", Uuid::new_v4()));
+        let child = parent.join("workspace");
+        fs::create_dir_all(&parent).unwrap();
+
+        assert!(workspace_root_usable(&child));
+        fs::remove_dir_all(parent).unwrap();
+    }
+
+    #[test]
+    fn rejects_a_workspace_root_when_the_parent_is_missing() {
+        let missing = std::env::temp_dir()
+            .join(format!("flowcontent-test-{}", Uuid::new_v4()))
+            .join("workspace");
+
+        assert!(!workspace_root_usable(&missing));
     }
 
     #[test]

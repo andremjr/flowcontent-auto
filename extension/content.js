@@ -35,9 +35,13 @@
     runtimeAvailable = false;
     bridgeReady = false;
     csWarn(`Contexto da extensao invalidado; ignorando mensagens desta instancia. Motivo: ${err?.message || String(err)}`);
+    rejectPendingRequests("Extension context invalidated");
+  }
+
+  function rejectPendingRequests(reason) {
     for (const [id, pending] of pendingFromBg.entries()) {
       pendingFromBg.delete(id);
-      pending.reject(new Error("Extension context invalidated"));
+      pending.reject(new Error(reason));
     }
   }
 
@@ -98,6 +102,15 @@
       csError(`Erro ao processar mensagem do page_bridge: ${err.message}`, err);
     }
   });
+
+  const teardownBridge = () => {
+    if (!isActiveInstance()) return;
+    bridgeReady = false;
+    rejectPendingRequests("A pagina do Flow foi recarregada ou perdeu a conexao com a extensao.");
+  };
+
+  window.addEventListener("pagehide", teardownBridge);
+  window.addEventListener("beforeunload", teardownBridge);
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (!isActiveInstance() || !runtimeAvailable) return false;
